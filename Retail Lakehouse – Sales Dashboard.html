@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Retail Lakehouse – Sales Dashboard</title>
+<style>
+:root{--bg:#f5f6fa;--card:#fff;--ink:#14213d;--mut:#667085;--line:#e4e7ec;--a:#e8590c;--b:#1c7ed6;--ok:#2f9e44;--bad:#e03131;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1220;--card:#181c2f;--ink:#e9ecf5;--mut:#98a2b3;--line:#2a3050;--a:#ff922b;--b:#4dabf7;--ok:#51cf66;--bad:#ff6b6b}}
+:root[data-theme="dark"]{--bg:#0f1220;--card:#181c2f;--ink:#e9ecf5;--mut:#98a2b3;--line:#2a3050;--a:#ff922b;--b:#4dabf7;--ok:#51cf66;--bad:#ff6b6b}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:20px 16px 32px}
+h1{font-size:22px;margin:0}.sub{color:var(--mut);font-size:13px;margin:4px 0 18px}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.tag{font-size:11px;border:1px solid var(--line);background:var(--card);padding:2px 8px;border-radius:99px;color:var(--mut)}
+.grid{display:grid;gap:12px}.kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.k{color:var(--mut);font-size:12px}.v{font-size:24px;font-weight:700;margin-top:2px}.d{font-size:12px;color:var(--ok)}
+.row{grid-template-columns:repeat(auto-fit,minmax(320px,1fr));margin-bottom:12px}
+h2{font-size:14px;margin:0 0 10px}
+.bar{display:grid;grid-template-columns:110px 1fr 70px;gap:8px;align-items:center;margin:7px 0;font-size:12px}
+.bar .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bar .t{background:var(--line);border-radius:5px;height:10px}
+.bar .f{height:10px;border-radius:5px;background:var(--b)}.bar .x{text-align:right;color:var(--mut)}
+.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--mut);font-weight:600}td.r,th.r{text-align:right}
+.pill{font-size:11px;padding:1px 8px;border-radius:99px;border:1px solid var(--line)}.cur{color:var(--ok);border-color:var(--ok)}
+.foot{color:var(--mut);font-size:12px;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Retail Lakehouse · Sales Dashboard</h1>
+  <div class="sub">Gold layer on Azure Databricks · 1–14 Sep 2026 · 2 incremental batches</div>
+  <div class="tags"><span class="tag">ADF</span><span class="tag">ADLS Gen2</span><span class="tag">Auto Loader</span><span class="tag">Delta Lake</span><span class="tag">Medallion</span><span class="tag">SCD2</span><span class="tag">CSV + JSON</span><span class="tag">SQL window functions</span></div>
+  <div style="height:16px"></div>
+  <div class="grid kpis" id="kpis"></div>
+  <div class="grid row">
+    <div class="card" style="grid-column:1/-1"><h2>Daily revenue and 7-day moving average</h2><div id="line"></div></div>
+  </div>
+  <div class="grid row">
+    <div class="card"><h2>Revenue by category</h2><div id="cat"></div></div>
+    <div class="card"><h2>Top 8 products by revenue</h2><div id="top"></div></div>
+  </div>
+  <div class="grid row">
+    <div class="card"><h2>Revenue by customer segment</h2><div id="seg"></div><h2 style="margin-top:14px">Orders by payment method</h2><div id="pay"></div></div>
+    <div class="card"><h2>Top customers by lifetime value</h2><div class="scroll"><table id="cv"></table></div></div>
+  </div>
+  <div class="grid row">
+    <div class="card"><h2>Data quality · rows quarantined in Silver</h2><div id="dq"></div></div>
+    <div class="card"><h2>Clickstream funnel (JSON events)</h2><div id="fun"></div></div>
+    <div class="card"><h2>SCD Type 2 · customer history preserved</h2><div class="scroll"><table id="scd"></table></div><div class="foot" id="scdn"></div></div>
+  </div>
+  <div class="foot">Built from the project's synthetic data generator, processed with the repo's own PySpark transforms. Amounts in INR (1 Cr = 10 million).</div>
+</div>
+<script>
+const D={"funnel": [{"c": "Home", "v": 798, "a": 177, "p": 73}, {"c": "Fashion", "v": 783, "a": 211, "p": 87}, {"c": "Electronics", "v": 718, "a": 172, "p": 71}, {"c": "Grocery", "v": 658, "a": 184, "p": 80}, {"c": "Books", "v": 648, "a": 182, "p": 66}, {"c": "Beauty", "v": 594, "a": 151, "p": 52}], "counts": {"customers": 575, "products": 120, "orders": 4053, "order_items": 10057, "customer_events": 6120}, "quarantine": {"orders": {"status_allowed": 16, "customer_id_not_null": 19}, "order_items": {"quantity_positive": 27}, "products": {}, "customer_events": {"customer_id_valid": 22, "event_type_allowed": 26, "event_id_not_null": 37}}, "rejected": {"orders": 35, "items": 27}, "scd_changed": 48, "kpi": {"rev": 186602692.57000023, "profit": 46509601.53999988, "orders": 3416, "customers": 523, "units": 25549}, "daily": [{"d": "2026-09-01", "rev": 12511974.2}, {"d": "2026-09-02", "rev": 13121143.690000001}, {"d": "2026-09-03", "rev": 14674046.920000002}, {"d": "2026-09-04", "rev": 11029891.59}, {"d": "2026-09-05", "rev": 11989639.56}, {"d": "2026-09-06", "rev": 14144242.499999998}, {"d": "2026-09-07", "rev": 10893274.89}, {"d": "2026-09-08", "rev": 14002056.829999998}, {"d": "2026-09-09", "rev": 14381898.13}, {"d": "2026-09-10", "rev": 15555649.82}, {"d": "2026-09-11", "rev": 12774207.08}, {"d": "2026-09-12", "rev": 14952803.270000001}, {"d": "2026-09-13", "rev": 13468201.09}, {"d": "2026-09-14", "rev": 13103663.0}], "cat": [{"c": "Electronics", "rev": 134777165.51, "pro": 35976294.09}, {"c": "Home", "rev": 32983300.08, "pro": 6190128.64}, {"c": "Fashion", "rev": 8377302.93, "pro": 1677437.59}, {"c": "Beauty", "rev": 4903847.11, "pro": 1344476.57}, {"c": "Grocery", "rev": 3427326.75, "pro": 884717.07}, {"c": "Books", "rev": 2133750.19, "pro": 436547.58}], "top": [{"n": "Electronics Item 103", "rev": 14238612.67}, {"n": "Electronics Item 23", "rev": 11414067.61}, {"n": "Electronics Item 27", "rev": 10240196.7}, {"n": "Electronics Item 94", "rev": 9663640.8}, {"n": "Electronics Item 70", "rev": 9272322.47}, {"n": "Electronics Item 56", "rev": 8682328.87}, {"n": "Electronics Item 83", "rev": 8231385.0}, {"n": "Electronics Item 81", "rev": 8192599.1}], "cv": [{"n": "Saanvi Das", "seg": "Regular", "city": "Bengaluru", "ltv": 1752614.1, "o": 11}, {"n": "Aarav Patel", "seg": "Regular", "city": "Bengaluru", "ltv": 1269117.51, "o": 10}, {"n": "Sneha Mehta", "seg": "Regular", "city": "Delhi", "ltv": 1099745.93, "o": 17}, {"n": "Priya Nair", "seg": "Premium", "city": "Chennai", "ltv": 1091240.86, "o": 9}, {"n": "Vikram Gowda", "seg": "Regular", "city": "Jaipur", "ltv": 1064336.1, "o": 11}, {"n": "Sneha Das", "seg": "Regular", "city": "Ahmedabad", "ltv": 1030802.22, "o": 14}], "seg": [{"s": "Regular", "rev": 127305627.03}, {"s": "Premium", "rev": 36280074.03}, {"s": "Gold", "rev": 23016991.51}], "pay": [{"p": "COD", "n": 866}, {"p": "CARD", "n": 862}, {"p": "UPI", "n": 849}, {"p": "NETBANKING", "n": 839}], "scd": [{"id": 25, "name": "Diya Mehta", "city": "Chennai", "from": "2026-09-01"}, {"id": 25, "name": "Diya Mehta", "city": "Mumbai", "from": "2026-09-10"}, {"id": 33, "name": "Vikram Rao", "city": "Hyderabad", "from": "2026-09-01"}, {"id": 33, "name": "Vikram Rao", "city": "Delhi", "from": "2026-09-08"}, {"id": 37, "name": "Meera Sharma", "city": "Hyderabad", "from": "2026-09-01"}, {"id": 37, "name": "Meera Sharma", "city": "Pune", "from": "2026-09-08"}]};
+const $=id=>document.getElementById(id);
+const cr=v=>"₹"+(v/1e7).toFixed(2)+" Cr", lk=v=>"₹"+(v/1e5).toFixed(1)+" L", n0=v=>Math.round(v).toLocaleString("en-IN");
+const k=D.kpi, margin=k.profit/k.rev*100;
+$("kpis").innerHTML=[["Revenue",cr(k.rev),"after cancels/returns"],["Profit",cr(k.profit),margin.toFixed(1)+"% margin"],["Orders",n0(k.orders),n0(k.units)+" units"],["Customers",n0(k.customers),"active buyers"],["Avg order value","₹"+n0(k.rev/k.orders),"per order"]]
+ .map(a=>`<div class="card"><div class="k">${a[0]}</div><div class="v">${a[1]}</div><div class="d">${a[2]}</div></div>`).join("");
+function bars(el,rows,fmt,color){const m=Math.max(...rows.map(r=>r[1]));
+ $(el).innerHTML=rows.map(r=>`<div class="bar"><div class="n" title="${r[0]}">${r[0]}</div><div class="t"><div class="f" style="width:${r[1]/m*100}%;${color?"background:"+color:""}"></div></div><div class="x">${fmt(r[1])}</div></div>`).join("")}
+bars("cat",D.cat.map(r=>[r.c,r.rev]),cr);
+bars("top",D.top.map(r=>[r.n.replace("Electronics ","Elec. "),r.rev]),lk,"var(--a)");
+bars("seg",D.seg.map(r=>[r.s,r.rev]),cr);
+bars("pay",D.pay.map(r=>[r.p,r.n]),n0,"var(--a)");
+// line chart
+(function(){const W=1000,H=240,p={l:48,r:12,t:12,b:28},d=D.daily,mx=Math.max(...d.map(x=>x.rev))*1.1,mn=0;
+ const X=i=>p.l+i*(W-p.l-p.r)/(d.length-1),Y=v=>p.t+(1-(v-mn)/(mx-mn))*(H-p.t-p.b);
+ const pts=d.map((x,i)=>X(i)+","+Y(x.rev)).join(" ");
+ let g="";for(let i=0;i<=4;i++){const v=mx*i/4,y=Y(v);g+=`<line x1="${p.l}" x2="${W-p.r}" y1="${y}" y2="${y}" style="stroke:var(--line)"/><text x="${p.l-6}" y="${y+4}" text-anchor="end" font-size="11" style="fill:var(--mut)">${(v/1e6).toFixed(0)}M</text>`}
+ d.forEach((x,i)=>{if(i%2==0)g+=`<text x="${X(i)}" y="${H-8}" text-anchor="middle" font-size="11" style="fill:var(--mut)">${x.d.slice(8)} Sep</text>`});
+ const dots=d.map((x,i)=>`<circle cx="${X(i)}" cy="${Y(x.rev)}" r="3.5" style="fill:var(--a)"><title>${x.d}: ${cr(x.rev)}</title></circle>`).join("");
+ const ma=d.map((x,i)=>{const w=d.slice(Math.max(0,i-6),i+1);return w.reduce((a,b)=>a+b.rev,0)/w.length});
+ const mpts=ma.map((v,i)=>X(i)+","+Y(v)).join(" ");
+ $("line").innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Daily revenue line chart">${g}<polygon points="${p.l},${Y(0)} ${pts} ${W-p.r},${Y(0)}" style="fill:var(--a);opacity:.12"/><polyline points="${pts}" fill="none" stroke-width="2.5" style="stroke:var(--a)"/><polyline points="${mpts}" fill="none" stroke-width="2.5" stroke-dasharray="6 4" style="stroke:var(--b)"/>${dots}<text x="${W-p.r}" y="${p.t+10}" text-anchor="end" font-size="11" style="fill:var(--b)">- - 7-day avg</text></svg>`})();
+$("cv").innerHTML="<tr><th>Customer</th><th>Segment</th><th>City</th><th class='r'>Orders</th><th class='r'>LTV</th></tr>"+D.cv.map(c=>`<tr><td>${c.n}</td><td>${c.seg}</td><td>${c.city}</td><td class="r">${c.o}</td><td class="r">${lk(c.ltv)}</td></tr>`).join("");
+$("fun").innerHTML="<table><tr><th>Category</th><th class='r'>Views</th><th class='r'>Add to cart</th><th class='r'>Purchases</th><th class='r'>View to cart</th><th class='r'>Cart to buy</th></tr>"+D.funnel.map(f=>`<tr><td>${f.c}</td><td class="r">${n0(f.v)}</td><td class="r">${n0(f.a)}</td><td class="r">${n0(f.p)}</td><td class="r">${(f.a/f.v*100).toFixed(1)}%</td><td class="r">${(f.p/f.a*100).toFixed(1)}%</td></tr>`).join("")+"</table>";
+const q=D.quarantine,tot=D.counts;
+const dq=[];for(const e in q)for(const r in q[e])dq.push([e+" · "+r,q[e][r]]);
+bars("dq",dq,n0,"var(--bad)");
+$("dq").insertAdjacentHTML("afterbegin",`<div class="k" style="margin-bottom:6px">Bronze rows: orders ${n0(tot.orders)} · items ${n0(tot.order_items)} · customers ${n0(tot.customers)} · products ${n0(tot.products)} · events ${n0(tot.customer_events)}</div>`);
+$("scd").innerHTML="<tr><th>ID</th><th>Name</th><th>City</th><th>Valid from</th><th>State</th></tr>"+D.scd.map((r,i,a)=>{const cur=!a[i+1]||a[i+1].id!=r.id;return `<tr><td>${r.id}</td><td>${r.name}</td><td>${r.city}</td><td>${r.from}</td><td><span class="pill ${cur?"cur":""}">${cur?"current":"closed"}</span></td></tr>`}).join("");
+$("scdn").textContent=D.scd_changed+" customers changed city/segment in batch 2 – old rows closed, new rows inserted.";
+</script>
+</body>
+</html>
