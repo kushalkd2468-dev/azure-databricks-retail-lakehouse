@@ -1,0 +1,37 @@
+[
+  {
+    "name": "CopySourceFilesToLanding",
+    "description": "Copy new CSV/JSON files from the upstream 'source' container into the lake's 'landing' zone, preserving the folder-per-entity layout.",
+    "type": "Copy",
+    "policy": {
+      "timeout": "0.02:00:00",
+      "retry": 2,
+      "retryIntervalInSeconds": 60
+    },
+    "inputs": [
+      { "referenceName": "ds_source_raw", "type": "DatasetReference" }
+    ],
+    "outputs": [
+      { "referenceName": "ds_landing_raw", "type": "DatasetReference" }
+    ],
+    "typeProperties": {
+      "source": {
+        "type": "BinarySource",
+        "storeSettings": {
+          "type": "AzureBlobStorageReadSettings",
+          "recursive": true,
+          "wildcardFileName": "*"
+        },
+        "formatSettings": { "type": "BinaryReadSettings" }
+      },
+      "sink": {
+        "type": "BinarySink",
+        "storeSettings": {
+          "type": "AzureBlobStorageWriteSettings",
+          "copyBehavior": "PreserveHierarchy"
+        }
+      },
+      "enableStaging": false
+    }
+  }
+]

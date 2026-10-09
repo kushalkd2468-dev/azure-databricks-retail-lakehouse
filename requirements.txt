@@ -1,0 +1,2 @@
+# Runtime deps are provided by the Databricks Runtime.
+# The data generator only uses the Python standard library.
